@@ -1,12 +1,12 @@
+# main.py
 import streamlit as st
 import pandas as pd
 import requests
-import plotly
 import plotly.express as px
 from datetime import datetime
 import time
 
-# Cryptocurrency holdings data
+# Data
 data = {
     "Crypto": [
         "Ethereum (ETH)", "Polkadot (DOT)", "Internet Computer (ICP)",
@@ -24,7 +24,6 @@ data = {
     ],
 }
 
-# Mapping CoinGecko IDs to cryptocurrencies
 coingecko_ids = [
     "ethereum", "polkadot", "internet-computer", "cosmos", "lido-dao",
     "celestia", "astar", "rocket-pool", "kusama", "moonbeam", "moonriver",
@@ -34,12 +33,11 @@ coingecko_ids = [
 ]
 
 def fetch_prices():
-    """Fetch current cryptocurrency prices from CoinGecko"""
+    """Fetch current cryptocurrency prices from CoinGecko."""
     url = "https://api.coingecko.com/api/v3/simple/price"
     params = {
         "ids": ",".join(coingecko_ids), 
-        "vs_currencies": "usd",
-        "timestamp": int(time.time())  # Add timestamp to prevent caching
+        "vs_currencies": "usd"
     }
     try:
         response = requests.get(url, params=params)
@@ -50,68 +48,41 @@ def fetch_prices():
         return {}
 
 def calculate_portfolio_value():
-    """Calculate current portfolio value"""
-    # Fetch current prices with a fresh request
+    """Calculate current portfolio value."""
     prices = fetch_prices()
-    
-    # Create DataFrame
     df = pd.DataFrame(data)
-    
-    # Add price column safely
     df["Price (USD)"] = [prices.get(coin_id, {}).get("usd", 0) for coin_id in coingecko_ids]
     df["Total Value (USD)"] = df["Holding"] * df["Price (USD)"]
-    
-    # Calculate total portfolio value
-    total_portfolio_value = df["Total Value (USD)"].sum()
-    
-    return df, total_portfolio_value
+    total_value = df["Total Value (USD)"].sum()
+    return df, total_value
 
 def main():
     st.title("KR1 Portfolio Tracker")
     
-    # Initialize session state for portfolio history if not exists
-    if 'portfolio_history' not in st.session_state:
-        st.session_state.portfolio_history = pd.DataFrame(columns=['Timestamp', 'Total Portfolio Value'])
+    # Initialize session state
+    if "portfolio_history" not in st.session_state:
+        st.session_state.portfolio_history = pd.DataFrame(columns=["Timestamp", "Total Portfolio Value"])
     
-    # Refresh button
+    # Fetch portfolio value
     if st.button("Fetch Current Portfolio Value"):
-        try:
-            # Calculate current portfolio value with fresh prices
-            df, total_portfolio_value = calculate_portfolio_value()
-            
-            # Add current value to portfolio history
-            new_entry = pd.DataFrame({
-                'Timestamp': [datetime.now()],
-                'Total Portfolio Value': [total_portfolio_value]
-            })
-            
-            # Append to existing history
-            st.session_state.portfolio_history = pd.concat([
-                st.session_state.portfolio_history, 
-                new_entry
-            ]).reset_index(drop=True)
-            
-            # Display current portfolio details
-            st.dataframe(df)
-            st.write(f"**Current Portfolio Value (USD):** ${total_portfolio_value:,.2f}")
-        
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
+        df, total_value = calculate_portfolio_value()
+        st.session_state.portfolio_history = pd.concat([
+            st.session_state.portfolio_history,
+            pd.DataFrame({"Timestamp": [datetime.now()], "Total Portfolio Value": [total_value]})
+        ]).reset_index(drop=True)
+        st.dataframe(df)
+        st.write(f"**Current Portfolio Value:** ${total_value:,.2f}")
     
-    # Display portfolio history line graph
+    # Portfolio history graph
     if not st.session_state.portfolio_history.empty:
-        st.write("### Portfolio Value Over Time")
         fig = px.line(
-            st.session_state.portfolio_history, 
-            x='Timestamp', 
-            y='Total Portfolio Value',
-            title='Portfolio Value Tracking',
-            labels={'Total Portfolio Value': 'Portfolio Value (USD)'}
+            st.session_state.portfolio_history,
+            x="Timestamp",
+            y="Total Portfolio Value",
+            title="Portfolio Value Over Time",
+            labels={"Total Portfolio Value": "Portfolio Value (USD)"}
         )
         st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.write("Click 'Fetch Current Portfolio Value' to start tracking")
 
-# Run the app
 if __name__ == "__main__":
     main()
